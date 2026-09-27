@@ -1,0 +1,91 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div style="padding: 20px; font-family: Arial, sans-serif; background: #f8f9fa; border-radius: 8px;">
+    <h2 style="color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px;">📊 Panel de Reporte Visual - IPET 1308</h2>
+
+    <!-- Formulario para cambiar de fecha -->
+    <form method="get" style="margin: 20px 0; background: #fff; padding: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: inline-block;">
+        <label for="fecha" style="font-weight: bold; margin-right: 10px;">Seleccionar Fecha:</label>
+        <input type="date" id="fecha" name="fecha" value="{{ fecha_str }}" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px; margin-right: 10px;">
+        <button type="submit" style="background: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">Consultar</button>
+    </form>
+
+    {% if mensaje_calendario %}
+        <div style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ffeeba;">
+            <strong>Aviso de Calendario:</strong> {{ mensaje_calendario }}
+        </div>
+    {% endif %}
+
+    <!-- Tarjetas de Estadísticas -->
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 30px;">
+        <div style="flex: 1; min-width: 200px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #6c757d;">
+            <h4 style="margin: 0; color: #6c757d;">Matrícula Total</h4>
+            <p style="font-size: 28px; font-weight: bold; margin: 10px 0 0 0;">{{ total_alumnos }}</p>
+        </div>
+        <div style="flex: 1; min-width: 200px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #28a745;">
+            <h4 style="margin: 0; color: #28a745;">Presentes (A tiempo)</h4>
+            <p style="font-size: 28px; font-weight: bold; margin: 10px 0 0 0;">{{ presentes|length }}</p>
+        </div>
+        <div style="flex: 1; min-width: 200px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #ffc107;">
+            <h4 style="margin: 0; color: #d39e00;">Llegadas Tarde</h4>
+            <p style="font-size: 28px; font-weight: bold; margin: 10px 0 0 0;">{{ tardes|length }}</p>
+        </div>
+        <div style="flex: 1; min-width: 200px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #dc3545;">
+            <h4 style="margin: 0; color: #dc3545;">Ausentes</h4>
+            <p style="font-size: 28px; font-weight: bold; margin: 10px 0 0 0;">{{ ausentes|length }}</p>
+        </div>
+        <div style="flex: 1; min-width: 200px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #17a2b8;">
+            <h4 style="margin: 0; color: #17a2b8;">% Asistencia</h4>
+            <p style="font-size: 28px; font-weight: bold; margin: 10px 0 0 0;">{{ porcentaje }}%</p>
+        </div>
+    </div>
+
+    {% if es_clases %}
+        <!-- Tablas de detalle -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            
+            <!-- Presentes -->
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h3 style="color: #28a745; margin-top: 0;">🟢 Presentes</h3>
+                <ul style="padding-left: 20px; line-height: 1.6;">
+                    {% for alum, hora in presentes %}
+                        <li><strong>{{ alum.apellido }}, {{ alum.nombre }}</strong> <br><small style="color: #666;">Ingreso: {{ hora|date:"H:i:s" }}</small></li>
+                    {% empty %}
+                        <p style="color: #888;">Ningún alumno registrado.</p>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Tarde -->
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h3 style="color: #d39e00; margin-top: 0;">🟡 Llegadas Tarde</h3>
+                <ul style="padding-left: 20px; line-height: 1.6;">
+                    {% for alum, hora in tardes %}
+                        <li><strong>{{ alum.apellido }}, {{ alum.nombre }}</strong> <br><small style="color: #666;">Ingreso: {{ hora|date:"H:i:s" }}</small></li>
+                    {% empty %}
+                        <p style="color: #888;">Sin llegadas tarde hoy.</p>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Ausentes -->
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h3 style="color: #dc3545; margin-top: 0;">🔴 Ausentes</h3>
+                <ul style="padding-left: 20px; line-height: 1.6;">
+                    {% for alum in ausentes %}
+                        <li><strong>{{ alum.apellido }}, {{ alum.nombre }}</strong> <br><small style="color: #666;">ID: {{ alum.codigo_identificador }}</small></li>
+                    {% empty %}
+                        <p style="color: #888;">¡Sin ausentes registrados!</p>
+                    {% endfor %}
+                </ul>
+            </div>
+
+        </div>
+    {% endif %}
+
+    <div style="margin-top: 30px;">
+        <a href="{% url 'admin:asistencias_asistencia_changelist' %}" style="background: #6c757d; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold;">← Volver al listado de Asistencias</a>
+    </div>
+</div>
+{% endblock %}

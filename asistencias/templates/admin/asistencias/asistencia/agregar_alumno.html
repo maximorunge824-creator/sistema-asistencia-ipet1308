@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Agregar Alumno - IPET 1308</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container py-5" style="max-width: 500px;">
+        <a href="{% url 'lista_alumnos' %}" class="btn btn-outline-secondary mb-3">← Volver a la Lista</a>
+        <div class="card p-4 shadow-sm bg-white">
+            <h3 class="text-primary mb-3">➕ Registrar Alumno</h3>
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" name="nombre" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Apellido</label>
+                    <input type="text" name="apellido" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Código Identificador (QR)</label>
+                    <input type="text" name="codigo_identificador" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-success w-100">Guardar Alumno</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

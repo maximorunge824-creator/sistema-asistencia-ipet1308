@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Asistencias - IPET 1308</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold text-primary">🏫 IPET 1308</h1>
+            <p class="lead text-secondary">Sistema Moderno de Control de Asistencias</p>
+        </div>
+
+        <div class="row text-center mb-5">
+            <div class="col-md-6 mb-3">
+                <div class="card shadow-sm border-0 p-4 bg-white rounded-4">
+                    <h2 class="display-4 fw-bold text-dark">{{ total_alumnos }}</h2>
+                    <p class="text-muted mb-0">Alumnos Registrados</p>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="card shadow-sm border-0 p-4 bg-white rounded-4">
+                    <h2 class="display-4 fw-bold text-success">{{ asistencias_hoy }}</h2>
+                    <p class="text-muted mb-0">Presentes Hoy</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-md-6 d-grid gap-3">
+                <a href="{% url 'reporte_diario' %}" class="btn btn-success btn-lg shadow-sm py-3 fw-semibold">
+                    📊 Ver Reporte Diario
+                </a>
+                <a href="{% url 'lista_alumnos' %}" class="btn btn-primary btn-lg shadow-sm py-3 fw-semibold">
+                    👥 Gestionar Alumnos
+                </a>
+                <a href="{% url 'agregar_alumno' %}" class="btn btn-outline-primary btn-lg py-3 fw-semibold">
+                    ➕ Registrar Nuevo Alumno
+                </a>
+                <a href="/admin/" class="btn btn-secondary btn-sm mt-4 text-white">
+                    ⚙️ Ir al Panel de Administración Técnico
+                </a>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
