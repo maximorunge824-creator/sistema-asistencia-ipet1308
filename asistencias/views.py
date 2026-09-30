@@ -1,12 +1,36 @@
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.http import HttpResponse
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.views.decorators.csrf import csrf_exempt
 from .models import Alumno, Asistencia
 from django.utils import timezone
 
+def es_usuario_autorizado(user):
+    return user.is_authenticated and user.is_staff
+
+# 1. PANEL DE CONTROL EN TIEMPO REAL (Solo administradores)
+@user_passes_test(es_usuario_autorizado, login_url='/login/')
 def dashboard_view(request):
     total_alumnos = Alumno.objects.count()
-    asistencias_hoy = Asistencia.objects.filter(fecha_hora__date=timezone.now().date()).count()
+    hoy = timezone.now().date()
+    asistencias_hoy = Asistencia.objects.filter(fecha_hora__date=hoy).order_by('-fecha_hora')
+    total_presentes = asistencias_hoy.count()
     
+    filas_tabla = ""
+    for asis in asistencias_hoy:
+        badge_color = "success" if asis.estado == 'Presente' else "warning text-dark"
+        filas_tabla += f"""
+        <tr>
+            <td class="fw-bold">{asis.alumno.apellido}, {asis.alumno.nombre}</td>
+            <td><code>{asis.alumno.codigo_identificador}</code></td>
+            <td><span class="badge bg-{badge_color}">{asis.estado}</span></td>
+            <td>{asis.fecha_hora.strftime('%H:%M:%S')}</td>
+        </tr>
+        """
+
+    if not filas_tabla:
+        filas_tabla = "<tr><td colspan='4' class='text-center text-muted'>No hay registros de asistencia todavía en el día de hoy.</td></tr>"
+
     html = f"""
     <!DOCTYPE html>
     <html lang="es">
@@ -15,15 +39,16 @@ def dashboard_view(request):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Panel de Asistencias - IPET 1308</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <meta http-equiv="refresh" content="10">
     </head>
     <body class="bg-light">
         <div class="container py-5">
             <div class="text-center mb-5">
                 <h1 class="display-5 fw-bold text-primary">🏫 IPET 1308</h1>
-                <p class="lead text-secondary">Sistema Moderno de Control de Asistencias</p>
+                <p class="lead text-secondary">Panel de Control en Tiempo Real</p>
             </div>
 
-            <div class="row text-center mb-5">
+            <div class="row text-center mb-4">
                 <div class="col-md-6 mb-3">
                     <div class="card shadow-sm border-0 p-4 bg-white rounded-4">
                         <h2 class="display-4 fw-bold text-dark">{total_alumnos}</h2>
@@ -32,19 +57,35 @@ def dashboard_view(request):
                 </div>
                 <div class="col-md-6 mb-3">
                     <div class="card shadow-sm border-0 p-4 bg-white rounded-4">
-                        <h2 class="display-4 fw-bold text-success">{asistencias_hoy}</h2>
-                        <p class="text-muted mb-0">Presentes Hoy</p>
+                        <h2 class="display-4 fw-bold text-success">{total_presentes}</h2>
+                        <p class="text-muted mb-0">Registros Hoy</p>
                     </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 p-4 bg-white rounded-4 mb-4">
+                <h3 class="fw-bold text-secondary mb-3">📋 Últimos Registros de Hoy</h3>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Alumno</th>
+                                <th>Código / DNI</th>
+                                <th>Estado</th>
+                                <th>Hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filas_tabla}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
             <div class="row justify-content-center">
                 <div class="col-md-6 d-grid gap-3">
-                    <a href="/escaner/" class="btn btn-warning btn-lg shadow-sm py-3 fw-bold text-dark">
-                        📷 Pantalla de Escaneo (Ingreso / Retiro)
-                    </a>
                     <a href="/reporte/" class="btn btn-success btn-lg shadow-sm py-3 fw-semibold">
-                        📊 Ver Reporte Diario
+                        📊 Ver Reporte Diario Completo
                     </a>
                     <a href="/alumnos/" class="btn btn-primary btn-lg shadow-sm py-3 fw-semibold">
                         👥 Gestionar Alumnos
@@ -52,7 +93,7 @@ def dashboard_view(request):
                     <a href="/alumnos/agregar/" class="btn btn-outline-primary btn-lg py-3 fw-semibold">
                         ➕ Registrar Nuevo Alumno
                     </a>
-                    <a href="/admin/" class="btn btn-secondary btn-sm mt-4 text-white">
+                    <a href="/admin/" class="btn btn-secondary btn-sm mt-2 text-white">
                         ⚙️ Ir al Panel de Administración Técnico
                     </a>
                 </div>
@@ -63,43 +104,102 @@ def dashboard_view(request):
     """
     return HttpResponse(html)
 
+# 2. ESCÁNER (Libre para estudiantes y exento de CSRF para que el lector QR funcione)
+@csrf_exempt
 def escaner_view(request):
     mensaje = ""
     tipo_alerta = ""
     
     if request.method == 'POST':
-        codigo = request.POST.get('codigo_identificador')
-        accion = request.POST.get('accion') # 'ingreso' o 'retiro'
-        
-        try:
-            alumno = Alumno.objects.get(codigo_identificador=codigo)
-            hoy = timezone.now().date()
+        codigo = request.POST.get('codigo_identificador') or request.POST.get('codigo') or request.POST.get('dni')
+        accion = request.POST.get('accion', 'ingreso')
+        if not accion:
+            accion = 'ingreso'
             
-            if accion == 'ingreso':
-                asistencia_existente = Asistencia.objects.filter(alumno=alumno, fecha_hora__date=hoy).first()
-                if asistencia_existente:
-                    mensaje = f"⚠️ {alumno.nombre} {alumno.apellido} ya tenía su ingreso registrado hoy."
-                    tipo_alerta = "warning"
-                else:
-                    Asistencia.objects.create(alumno=alumno, estado='Presente')
-                    mensaje = f"✅ ¡Ingreso registrado con éxito para {alumno.nombre} {alumno.apellido}!"
-                    tipo_alerta = "success"
+        if codigo:
+            codigo = codigo.strip()
+            
+            try:
+                alumno = Alumno.objects.filter(codigo_identificador=codigo).first()
+                if not alumno:
+                    alumno = Alumno.objects.filter(dni=codigo).first()
                     
-            elif accion == 'retiro':
-                asistencia = Asistencia.objects.filter(alumno=alumno, fecha_hora__date=hoy).first()
-                if asistencia:
-                    asistencia.estado = 'Retirado'
-                    asistencia.save()
-                    mensaje = f"🚪 {alumno.nombre} {alumno.apellido} se ha registrado como RETIRADO."
-                    tipo_alerta = "info"
-                else:
-                    Asistencia.objects.create(alumno=alumno, estado='Retirado')
-                    mensaje = f"🚪 Retiro registrado para {alumno.nombre} {alumno.apellido}."
-                    tipo_alerta = "info"
+                if not alumno:
+                    raise Alumno.DoesNotExist()
                     
-        except Alumno.DoesNotExist:
-            mensaje = "❌ Error: Código de alumno no encontrado en el sistema."
+                hoy = timezone.now().date()
+                
+                if accion == 'ingreso':
+                    asistencia_existente = Asistencia.objects.filter(alumno=alumno, fecha_hora__date=hoy).first()
+                    if asistencia_existente:
+                        mensaje = f"⚠️ {alumno.nombre} {alumno.apellido} ya tenía su ingreso registrado hoy."
+                        tipo_alerta = "warning"
+                    else:
+                        Asistencia.objects.create(alumno=alumno, estado='Presente')
+                        mensaje = f"✅ ¡Ingreso registrado con éxito para {alumno.nombre} {alumno.apellido}!"
+                        tipo_alerta = "success"
+                        
+                elif accion == 'retiro':
+                    asistencia = Asistencia.objects.filter(alumno=alumno, fecha_hora__date=hoy).first()
+                    if asistencia:
+                        asistencia.estado = 'Retirado'
+                        asistencia.save()
+                        mensaje = f"🚪 {alumno.nombre} {alumno.apellido} se ha registrado como RETIRADO."
+                        tipo_alerta = "info"
+                    else:
+                        Asistencia.objects.create(alumno=alumno, estado='Retirado')
+                        mensaje = f"🚪 Retiro registrado para {alumno.nombre} {alumno.apellido}."
+                        tipo_alerta = "info"
+                        
+            except Alumno.DoesNotExist:
+                mensaje = f"❌ Error: El código '{codigo}' no fue encontrado en el sistema."
+                tipo_alerta = "danger"
+        else:
+            mensaje = "❌ Error: No se detectó ningún código válido."
             tipo_alerta = "danger"
+
+    return render(request, 'asistencias/escaner.html', {
+        'mensaje': mensaje,
+        'tipo_alerta': tipo_alerta
+    })
+
+@user_passes_test(es_usuario_autorizado, login_url='/login/')
+def reporte_diario_view(request):
+    return HttpResponse("<h1>Reporte Diario</h1><a href='/'>Volver al inicio</a>")
+
+@user_passes_test(es_usuario_autorizado, login_url='/login/')
+def lista_alumnos_view(request):
+    return HttpResponse("<h1>Lista de Alumnos</h1><a href='/'>Volver al inicio</a>")
+
+@user_passes_test(es_usuario_autorizado, login_url='/login/')
+def agregar_alumno_view(request):
+    mensaje = ""
+    tipo_alerta = ""
+    
+    if request.method == 'POST':
+        nombre = request.POST.get('nombre')
+        apellido = request.POST.get('apellido')
+        dni = request.POST.get('dni')
+        
+        if nombre and apellido and dni:
+            try:
+                codigo_generado = f"IPET1308-{dni}"
+                Alumno.objects.create(
+                    nombre=nombre,
+                    apellido=apellido,
+                    dni=dni,
+                    codigo_identificador=codigo_generado
+                )
+                mensaje = f"✅ Alumno {apellido}, {nombre} registrado con éxito con el código {codigo_generado}"
+                tipo_alerta = "success"
+            except Exception as e:
+                mensaje = f"❌ Error al registrar (es posible que el DNI ya exista): {e}"
+                tipo_alerta = "danger"
+        else:
+            mensaje = "⚠️ Todos los campos son obligatorios."
+            tipo_alerta = "warning"
+
+    alerta_html = f'<div class="alert alert-{tipo_alerta} text-center fw-bold">{mensaje}</div>' if mensaje else ''
 
     html = f"""
     <!DOCTYPE html>
@@ -107,107 +207,48 @@ def escaner_view(request):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Escaneo de Asistencia - IPET 1308</title>
+        <title>Registrar Alumno - IPET 1308</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-        <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     </head>
     <body class="bg-light">
-        <div class="container py-4">
-            <div class="text-center mb-3">
-                <h1 class="fw-bold text-primary">📷 Terminal de Escaneo IPET 1308</h1>
-                <p class="text-muted">Use la cámara o ingrese el código del alumno</p>
-            </div>
-
+        <div class="container py-5">
             <div class="row justify-content-center">
                 <div class="col-md-6">
                     <div class="card shadow border-0 p-4 bg-white rounded-4">
+                        <h2 class="fw-bold text-primary mb-3 text-center">➕ Nuevo Alumno</h2>
+                        <p class="text-muted text-center mb-4">El código y el QR se generarán como <b>IPET1308-[DNI]</b></p>
                         
-                        <div class="text-center mb-3">
-                            <button type="button" id="btn-activar-camara" class="btn btn-outline-primary fw-bold w-100 py-2" onclick="toggleCamara()">
-                                📹 Activar Cámara para Escanear
-                            </button>
-                        </div>
+                        {alerta_html}
 
-                        <div id="reader" style="width: 100%; display: none;" class="mb-3 rounded overflow-hidden"></div>
-
-                        <form method="POST" id="form-asistencia">
+                        <form method="POST">
+                            {{% csrf_token %}}
                             <div class="mb-3">
-                                <label for="codigo_identificador" class="form-label fw-bold">Código Identificador:</label>
-                                <input type="text" name="codigo_identificador" id="codigo_identificador" class="form-control form-control-lg text-center" placeholder="Escanee o escriba el código..." autofocus required>
+                                <label class="form-label fw-bold">Nombre:</label>
+                                <input type="text" class="form-control" name="nombre" required>
                             </div>
-                            
-                            <div class="d-grid gap-2 mb-3">
-                                <button type="submit" name="accion" value="ingreso" class="btn btn-success btn-lg fw-bold">
-                                    📥 Registrar Ingreso (Presente)
-                                </button>
-                                <button type="submit" name="accion" value="retiro" class="btn btn-danger btn-lg fw-bold">
-                                    🚪 Registrar Retiro Anticipado
-                                </button>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Apellido:</label>
+                                <input type="text" class="form-control" name="apellido" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">DNI:</label>
+                                <input type="text" class="form-control" name="dni" placeholder="Ej: 45123456" required>
+                            </div>
+
+                            <div class="d-grid gap-2 mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg fw-bold">💾 Guardar y Generar QR</button>
+                                <a href="/" class="btn btn-outline-secondary">← Volver al Panel</a>
                             </div>
                         </form>
-
-                        {f'<div class="alert alert-{tipo_alerta} text-center fw-bold mt-3" role="alert">{mensaje}</div>' if mensaje else ''}
-                        
-                        <div class="text-center mt-3">
-                            <a href="/" class="btn btn-outline-secondary btn-sm">← Volver al Panel Principal</a>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <script>
-            let html5QrCode;
-            let camaraActiva = false;
-
-            function toggleCamara() {{
-                const readerDiv = document.getElementById('reader');
-                const btnCamara = document.getElementById('btn-activar-camara');
-                const inputCodigo = document.getElementById('codigo_identificador');
-
-                if (!camaraActiva) {{
-                    readerDiv.style.display = 'block';
-                    btnCamara.textContent = '❌ Apagar Cámara';
-                    btnCamara.classList.replace('btn-outline-primary', 'btn-outline-danger');
-                    
-                    html5QrCode = new Html5Qrcode("reader");
-                    html5QrCode.start(
-                        {{ facingMode: "environment" }},
-                        {{ fps: 10, qrbox: {{ width: 250, height: 150 }} }},
-                        (decodedText, decodedResult) => {{
-                            inputCodigo.value = decodedText;
-                            toggleCamara();
-                        }},
-                        (errorMessage) => {{}}
-                    ).catch((err) => {{
-                        alert("No se pudo acceder a la cámara: " + err);
-                        toggleCamara();
-                    }});
-                    camaraActiva = true;
-                }} else {{
-                    if (html5QrCode) {{
-                        html5QrCode.stop().then(() => {{
-                            readerDiv.style.display = 'none';
-                            btnCamara.textContent = '📹 Activar Cámara para Escanear';
-                            btnCamara.classList.replace('btn-outline-danger', 'btn-outline-primary');
-                            camaraActiva = false;
-                        }}).catch((err) => {{
-                            console.log("Error al detener la cámara", err);
-                        }});
-                    }}
-                }}
-            }}
-        </script>
     </body>
     </html>
     """
     return HttpResponse(html)
 
-def reporte_diario_view(request):
-    return HttpResponse("<h1>Reporte Diario</h1><a href='/'>Volver al inicio</a>")
-
-def lista_alumnos_view(request):
-    return HttpResponse("<h1>Lista de Alumnos</h1><a href='/'>Volver al inicio</a>")
-
-def agregar_alumno_view(request):
-    return HttpResponse("<h1>Agregar Alumno</h1><a href='/'>Volver al inicio</a>")
+@login_required
+def portal_alumno(request):
+    return HttpResponse("<h1>Portal del Alumno</h1><p>Vista exclusiva para alumnos.</p>")

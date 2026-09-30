@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escáner de Asistencias - IPET 1308</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="display-5 fw-bold text-primary">🏫 IPET 1308</h1>
+            <p class="lead text-secondary">Registro de Asistencias - Tótem de Estudiantes</p>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card shadow border-0 p-4 bg-white rounded-4">
+                    
+                    {% if mensaje %}
+                        <div class="alert alert-{{ tipo_alerta }} text-center fw-bold" role="alert">
+                            {{ mensaje }}
+                        </div>
+                    {% endif %}
+
+                    <form method="POST" id="form-asistencia">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="codigo_identificador" class="form-label fw-bold">Código o DNI del Alumno:</label>
+                            <input type="text" class="form-control form-control-lg text-center" id="codigo_identificador" name="codigo_identificador" placeholder="Escaneá o escribí el código" required autofocus>
+                        </div>
+
+                        <div id="reader" class="mb-3" style="display: none;"></div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" name="accion" value="ingreso" class="btn btn-success btn-lg fw-bold">
+                                📥 Registrar Ingreso
+                            </button>
+                            <button type="submit" name="accion" value="retiro" class="btn btn-warning btn-lg fw-bold text-dark">
+                                🚪 Registrar Retiro
+                            </button>
+                            <button type="button" id="btn-camara" onclick="toggleCamara()" class="btn btn-primary btn-lg fw-bold">
+                                📷 Activar Cámara para QR
+                            </button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let html5QrCode;
+        let camaraActiva = false;
+
+        function toggleCamara() {
+            const readerDiv = document.getElementById('reader');
+            const btnCamara = document.getElementById('btn-camara');
+            const inputCodigo = document.getElementById('codigo_identificador');
+
+            if (!camaraActiva) {
+                readerDiv.style.display = "block";
+                btnCamara.innerText = "❌ Apagar Cámara";
+                btnCamara.classList.remove("btn-primary");
+                btnCamara.classList.add("btn-danger");
+
+                html5QrCode = new Html5Qrcode("reader");
+                html5QrCode.start(
+                    { facingMode: "environment" },
+                    {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 }
+                    },
+                    (decodedText, decodedResult) => {
+                        inputCodigo.value = decodedText;
+                        detenerCamara();
+                        document.getElementById('form-asistencia').submit();
+                    },
+                    (errorMessage) => {}
+                ).catch((err) => {
+                    alert("No se pudo acceder a la cámara: " + err);
+                    detenerCamara();
+                });
+
+                camaraActiva = true;
+            } else {
+                detenerCamara();
+            }
+        }
+
+        function detenerCamara() {
+            if (html5QrCode && camaraActiva) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('reader').style.display = "none";
+                    const btnCamara = document.getElementById('btn-camara');
+                    btnCamara.innerText = "📷 Activar Cámara para QR";
+                    btnCamara.classList.remove("btn-danger");
+                    btnCamara.classList.add("btn-primary");
+                    camaraActiva = false;
+                }).catch(err => {
+                    console.error("Error al detener la cámara.", err);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
