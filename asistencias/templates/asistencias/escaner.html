@@ -3,106 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escáner de Asistencias - IPET 1308</title>
+    <title>Tótem de Asistencias - IPET 1308</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Html5Qrcode Scanner -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        .totem-card {
+            border-radius: 24px;
+            border: none;
+            box-shadow: 0 1rem 3rem rgba(0,0,0,.1);
+        }
+        #reader {
+            border: none !important;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #f8f9fa;
+            min-height: 250px;
+        }
+        #reader__dashboard_section_csr button, #reader__dashboard_section_swaplink {
+            background-color: #0d6efd !important;
+            color: white !important;
+            border: none !important;
+            padding: 10px 20px !important;
+            border-radius: 50rem !important;
+            font-weight: bold !important;
+            box-shadow: 0 4px 6px rgba(13, 110, 253, 0.2);
+            text-decoration: none !important;
+            display: inline-block;
+            margin-top: 10px;
+        }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container py-5">
-        <div class="text-center mb-5">
-            <h1 class="display-5 fw-bold text-primary">🏫 IPET 1308</h1>
-            <p class="lead text-secondary">Registro de Asistencias - Tótem de Estudiantes</p>
-        </div>
-
+<body class="bg-light d-flex align-items-center py-5" style="min-height: 100vh;">
+    <div class="container">
         <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card shadow border-0 p-4 bg-white rounded-4">
+            <div class="col-md-7">
+                <div class="card totem-card p-5 bg-white text-center">
+                    <div class="mb-4">
+                        <span class="badge bg-primary-subtle text-primary px-3 py-2 rounded-pill fw-bold mb-2">SISTEMA OFICIAL</span>
+                        <h2 class="fw-bold text-dark display-6">🏫 IPET 1308</h2>
+                        <p class="text-muted">Tótem de Estudiantes - Registro Rápido de Asistencias</p>
+                    </div>
                     
                     {% if mensaje %}
-                        <div class="alert alert-{{ tipo_alerta }} text-center fw-bold" role="alert">
-                            {{ mensaje }}
-                        </div>
+                    <div class="alert alert-{{ tipo_alerta }} text-center fw-bold rounded-4 shadow-sm mb-4">
+                        {{ mensaje }}
+                    </div>
                     {% endif %}
 
-                    <form method="POST" id="form-asistencia">
+                    <form method="POST" id="asistenciaForm">
                         {% csrf_token %}
-                        <div class="mb-3">
-                            <label for="codigo_identificador" class="form-label fw-bold">Código o DNI del Alumno:</label>
-                            <input type="text" class="form-control form-control-lg text-center" id="codigo_identificador" name="codigo_identificador" placeholder="Escaneá o escribí el código" required autofocus>
+                        <input type="hidden" id="accionInput" name="accion" value="">
+                        
+                        <div class="mb-4 text-start">
+                            <label class="form-label fw-bold text-secondary">Código o DNI del Alumno detectado:</label>
+                            <input type="text" class="form-control form-control-lg text-center fw-bold text-primary bg-light rounded-3 py-3 fs-4" id="codigoInput" name="codigo" value="Esperando código QR..." readonly required>
+                        </div>
+                        
+                        <!-- Contenedor del escáner -->
+                        <div class="mb-4">
+                            <div id="reader" class="p-2 border bg-light shadow-sm"></div>
                         </div>
 
-                        <div id="reader" class="mb-3" style="display: none;"></div>
-
-                        <div class="d-grid gap-2 mt-4">
-                            <button type="submit" name="accion" value="ingreso" class="btn btn-success btn-lg fw-bold">
-                                📥 Registrar Ingreso
-                            </button>
-                            <button type="submit" name="accion" value="retiro" class="btn btn-warning btn-lg fw-bold text-dark">
-                                🚪 Registrar Retiro
-                            </button>
-                            <button type="button" id="btn-camara" onclick="toggleCamara()" class="btn btn-primary btn-lg fw-bold">
-                                📷 Activar Cámara para QR
-                            </button>
+                        <div class="d-grid gap-3">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <button type="button" onclick="enviarAccion('ingreso')" class="btn btn-success btn-lg fw-bold w-100 py-3 rounded-3 shadow-sm">📥 Registrar INGRESO</button>
+                                </div>
+                                <div class="col-6">
+                                    <button type="button" onclick="enviarAccion('retiro')" class="btn btn-warning btn-lg fw-bold text-dark w-100 py-3 rounded-3 shadow-sm">🚪 Registrar RETIRO</button>
+                                </div>
+                            </div>
+                            <a href="/" class="btn btn-outline-secondary mt-3 rounded-3 py-2 fw-semibold">← Volver al Panel de Admin</a>
                         </div>
                     </form>
-
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        let html5QrCode;
-        let camaraActiva = false;
+        let html5QrcodeScanner = null;
 
-        function toggleCamara() {
-            const readerDiv = document.getElementById('reader');
-            const btnCamara = document.getElementById('btn-camara');
-            const inputCodigo = document.getElementById('codigo_identificador');
-
-            if (!camaraActiva) {
-                readerDiv.style.display = "block";
-                btnCamara.innerText = "❌ Apagar Cámara";
-                btnCamara.classList.remove("btn-primary");
-                btnCamara.classList.add("btn-danger");
-
-                html5QrCode = new Html5Qrcode("reader");
-                html5QrCode.start(
-                    { facingMode: "environment" },
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 }
-                    },
-                    (decodedText, decodedResult) => {
-                        inputCodigo.value = decodedText;
-                        detenerCamara();
-                        document.getElementById('form-asistencia').submit();
-                    },
-                    (errorMessage) => {}
-                ).catch((err) => {
-                    alert("No se pudo acceder a la cámara: " + err);
-                    detenerCamara();
-                });
-
-                camaraActiva = true;
-            } else {
-                detenerCamara();
-            }
+        function onScanSuccess(decodedText, decodedResult) {
+            document.getElementById('codigoInput').value = decodedText;
+            document.getElementById('codigoInput').classList.remove('bg-light', 'text-primary');
+            document.getElementById('codigoInput').classList.add('bg-success-subtle', 'text-success');
         }
 
-        function detenerCamara() {
-            if (html5QrCode && camaraActiva) {
-                html5QrCode.stop().then(() => {
-                    document.getElementById('reader').style.display = "none";
-                    const btnCamara = document.getElementById('btn-camara');
-                    btnCamara.innerText = "📷 Activar Cámara para QR";
-                    btnCamara.classList.remove("btn-danger");
-                    btnCamara.classList.add("btn-primary");
-                    camaraActiva = false;
-                }).catch(err => {
-                    console.error("Error al detener la cámara.", err);
-                });
+        function onScanFailure(error) {
+            // Se ignoran errores de fotogramas sin QR
+        }
+
+        function iniciarEscaner() {
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "reader",
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true
+                    },
+                    rememberLastUsedCamera: true
+                },
+                false
+            );
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            iniciarEscaner();
+        });
+
+        function enviarAccion(tipo) {
+            let codigo = document.getElementById('codigoInput').value.trim();
+            if (!codigo || codigo === "Esperando código QR...") {
+                alert("⚠️ Por favor, escaneá un código QR con la cámara primero.");
+                return;
             }
+            document.getElementById('accionInput').value = tipo;
+            
+            if (html5QrcodeScanner) {
+                try {
+                    html5QrcodeScanner.clear();
+                } catch (e) {}
+            }
+            
+            document.getElementById('asistenciaForm').submit();
         }
     </script>
 </body>

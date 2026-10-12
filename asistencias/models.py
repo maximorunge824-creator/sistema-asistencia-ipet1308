@@ -30,7 +30,7 @@ class HorarioEscolar(models.Model):
     hora_salida = models.TimeField()
 
     def __str__(self):
-        return f"{self.dia_semana}: {self.hora_entrada} - {self.hora_salida}"
+        return f"{self.dia_semana}: {self.hora_entrada} a {self.hora_salida}"
 
 class CalendarioEscolar(models.Model):
     fecha = models.DateField(unique=True)
@@ -38,4 +38,4 @@ class CalendarioEscolar(models.Model):
     es_habil = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.fecha} - {self.descripcion}"
+        return f"{self.fecha}: {self.descripcion}"
